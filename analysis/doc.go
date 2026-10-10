@@ -21,5 +21,5 @@
 // # Dependency position
 //
 // Imports the standard library, golang.org/x/tools/go/analysis and
-// golang.org/x/tools/go/types/typeutil. cmd/dokimi-lint-go imports it.
+// golang.org/x/tools/go/types/typeutil. cmd/dokimi-lint-go and golangci import it.
 package analysis
