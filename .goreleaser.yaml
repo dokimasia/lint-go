@@ -112,6 +112,28 @@ sboms:
     args: [tool, run, go.syft, --, "$artifact", --output, "spdx-json=$document", --enrich, all]
     artifacts: package
 
+# ergon release ci homebrew commits each cask to the tap after the publish. The hook removes the
+# quarantine attribute on macOS, because the binaries are not notarized.
+homebrew_casks:
+  - name: dokimi-lint-go
+    ids: [dokimi-lint-go]
+    binaries: [dokimi-lint-go]
+    homepage: https://github.com/dokimasia/lint-go
+    description: "Reports Go error texts without their package name and expired test skips"
+    license: MIT
+    url:
+      template: "https://github.com/dokimasia/lint-go/releases/download/v{{ .Version }}/{{ .ArtifactName }}"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/dokimi-lint-go"]
+          end
+    repository:
+      owner: dokimasia
+      name: homebrew-tap
+    skip_upload: true
+
 # ergon creates the release of the tag, and changesets writes its notes.
 changelog:
   disable: true
