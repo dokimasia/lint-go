@@ -1,0 +1,123 @@
+# Managed by ergon init. Add repository settings to .ergon/local/.goreleaser.yaml and run ergon init sync.
+#
+# The commands of the root module, which the key binaries of the section go of .ergon.yaml lists.
+# ergon release pack builds, packs and signs them for each release of the module in the job pack of
+# release.yml: it tags the commit with the tag of the module, and runs GoReleaser in snapshot mode
+# with the version of the release in ERGON_VERSION. ergon release publish attaches the assets to the
+# release of the tag before it publishes the release.
+
+version: 2
+
+project_name: lint-go
+
+dist: dist/goreleaser/lint-go
+
+snapshot:
+  version_template: "{{ .Env.ERGON_VERSION }}"
+
+# A static binary without the paths of the runner, the symbol table and DWARF data. Go writes the
+# version of the module from its tag, and applies a default.pgo beside the main package. The build
+# <name>-upx has the Linux targets of a command, and UPX packs each of its binaries with LZMA, whose
+# packed binaries syft still reads. UPX refuses macOS binaries, and syft reads no packed Windows
+# binary, so the build <name> of the other targets has no UPX.
+builds:
+  - id: dokimi-lint-go
+    dir: .
+    main: ./cmd/dokimi-lint-go
+    binary: dokimi-lint-go
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: [-s -w]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets:
+      - darwin_amd64_v1
+      - darwin_arm64_v8.0
+      - windows_amd64_v1
+      - windows_arm64_v8.0
+  - id: dokimi-lint-go-upx
+    dir: .
+    main: ./cmd/dokimi-lint-go
+    binary: dokimi-lint-go
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: [-s -w]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets:
+      - linux_amd64_v1
+      - linux_arm64_v8.0
+    hooks:
+      post:
+        - ergon tool run go.upx -- --best --lzma --quiet "{{ .Path }}"
+
+# The files of each archive have a fixed owner and mode and the time of the commit, so the bytes of
+# an archive do not depend on the runner.
+archives:
+  - id: dokimi-lint-go
+    ids: [dokimi-lint-go, dokimi-lint-go-upx]
+    formats: [tar.gz]
+    name_template: "dokimi-lint-go_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds_info: {owner: root, group: root, mtime: "{{ .CommitDate }}"}
+    files:
+      - src: LICENSE*
+        info: {owner: root, group: root, mode: 0644, mtime: "{{ .CommitDate }}"}
+      - src: README.md
+        info: {owner: root, group: root, mode: 0644, mtime: "{{ .CommitDate }}"}
+
+nfpms:
+  - id: dokimi-lint-go
+    ids: [dokimi-lint-go, dokimi-lint-go-upx]
+    package_name: dokimi-lint-go
+    file_name_template: '{{ replace .ConventionalFileName "~" "-" }}'
+    vendor: "Dokimasia B.V."
+    maintainer: "Dokimasia B.V. <security@dokimi.dev>"
+    homepage: https://github.com/dokimasia/lint-go
+    description: "Reports Go error texts without their package name and expired test skips"
+    license: MIT
+    formats: [deb, rpm, apk]
+    bindir: /usr/bin
+    section: utils
+    mtime: "{{ .CommitDate }}"
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/dokimi-lint-go/copyright
+        file_info: {mode: 0644, mtime: "{{ .CommitDate }}"}
+    deb:
+      lintian_overrides:
+        - statically-linked-binary
+        - changelog-file-missing-in-native-package
+
+source:
+  enabled: true
+  name_template: "lint-go_{{ .Version }}_source"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# cosign signs checksums.txt with the OIDC identity of the workflow, without a key.
+signs:
+  - cmd: ergon
+    signature: "${artifact}.sigstore.json"
+    args: [tool, run, go.cosign, --, sign-blob, "--bundle=${signature}", "${artifact}", --yes]
+    artifacts: checksum
+
+# syft writes an SPDX SBOM of each archive and each package, which checksums.txt lists.
+sboms:
+  - id: archives
+    cmd: ergon
+    args: [tool, run, go.syft, --, "$artifact", --output, "spdx-json=$document", --enrich, all]
+    artifacts: archive
+  - id: packages
+    cmd: ergon
+    args: [tool, run, go.syft, --, "$artifact", --output, "spdx-json=$document", --enrich, all]
+    artifacts: package
+
+# ergon creates the release of the tag, and changesets writes its notes.
+changelog:
+  disable: true
+
+release:
+  disable: true
+
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
