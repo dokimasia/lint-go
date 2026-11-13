@@ -8,12 +8,15 @@ default_stages: [pre-commit]
 repos:
   # File hygiene, without a language toolchain, at the release of the section common of
   # .ergon.yaml, before each commit. pre-commit-hooks declares three of these hooks for the stage
-  # pre-push as well, so this configuration limits each of them to the stage pre-commit.
+  # pre-push as well, so this configuration limits each of them to the stage pre-commit. The hooks
+  # that change or refuse the content of a file skip the paths of common.hooks.exclude of
+  # .ergon.yaml. trailing-whitespace also skips the Markdown files, in which two trailing spaces
+  # break a line.
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: '\.md$'
+        exclude_types: [markdown]
         stages: [pre-commit]
       - id: end-of-file-fixer
         stages: [pre-commit]
@@ -53,8 +56,9 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
-      # The commit message, against .commitlint.yaml. ergon installs the commitlint of the section
-      # common of .ergon.yaml, and checks its archive against the digest of the section.
+      # The commit message, against .commitlint.yaml. The command of the key ergon of the section
+      # common of .ergon.yaml installs the commitlint of the section, and checks its archive against
+      # the digest of the section.
       - id: commitlint
         name: commitlint
         entry: ergon tool run common.commitlint -- lint --message

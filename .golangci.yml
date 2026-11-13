@@ -84,8 +84,11 @@ linters:
     - thelper
     - tparallel
     - usetesting
-    # The module plugins of go.lint.plugins, which ergon tool run builds into golangci-lint
+    # The analyzers of go.lint.analyzers and the module plugins of go.lint.plugins, which ergon tool
+    # run builds into golangci-lint
     - assertlint
+    - errorprefix
+    - skipexpiry
 
   settings:
     asasalint:
@@ -94,10 +97,14 @@ linters:
     copyloopvar:
       check-alias: true
 
-    # golangci-lint loads each module plugin of go.lint.plugins from its program. A repository
-    # sets the settings of a plugin in its local file, under the name of the plugin.
+    # golangci-lint loads each analyzer and module plugin from its program. A repository sets the
+    # settings of a plugin in its local file, under the name of the plugin.
     custom:
       assertlint:
+        type: module
+      errorprefix:
+        type: module
+      skipexpiry:
         type: module
 
     decorder:
@@ -287,8 +294,11 @@ formatters:
     gofumpt:
       extra:
         group-params: true
+    # golines keeps each struct tag as it is written. Its default, reformat-tags, pads the keys of
+    # the tags of a struct into columns.
     golines:
       max-len: 120
+      reformat-tags: false
 
 issues:
   max-issues-per-linter: 0
