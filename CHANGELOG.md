@@ -1,5 +1,15 @@
 # go.dokimi.dev/lint
 
+## 0.3.0
+
+### Minor Changes
+
+- 0367daf: Add the analyzer `lockblock` to `dokimi-lint-go` and to the module plugins, which reports a blocking call inside the critical section of a `sync.Mutex` or a `sync.RWMutex`.
+
+### Patch Changes
+
+- cefe9a6: Fix `errorprefix` to expect the name of the command in a package `main`, such as `greet:`, in place of `main:`.
+
 ## 0.2.0
 
 ### Minor Changes
