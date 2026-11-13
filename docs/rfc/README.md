@@ -9,3 +9,4 @@ Proposals, and the argument that produced them. An RFC is written to be argued w
 
 | RFC | Title | Status |
 |---|---|---|
+| [0001](0001-a-blocking-call-in-a-critical-section.md) | A blocking call in a critical section | Accepted |
