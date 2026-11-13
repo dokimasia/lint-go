@@ -22,6 +22,11 @@ func TestErrorPrefix(t *testing.T) {
 			analysistest.Run(t, analysistest.TestData(), analysis.ErrorPrefix(none), "clock", "other")
 		})
 
+		t.Run("expects the name of its command in a package main", func(t *testing.T) {
+			t.Parallel()
+			analysistest.Run(t, analysistest.TestData(), analysis.ErrorPrefix(none), "cmd/greet", "tool/v2")
+		})
+
 		t.Run("is named errorprefix", func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, analysis.ErrorPrefix(none).Name, "errorprefix", "the name of the analyzer")
