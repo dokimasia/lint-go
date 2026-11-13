@@ -5,18 +5,19 @@
 
 # lint-go
 
-`go.dokimi.dev/lint` contains two analyzers of Go, the command that runs them, and the module plugins that run them in golangci-lint.
+`go.dokimi.dev/lint` contains three analyzers of Go, the command that runs them, and the module plugins that run them in golangci-lint.
 
 | Package | Contents |
 |---|---|
-| [`analysis`](analysis) | The analyzers `errorprefix` and `skipexpiry`, for `golang.org/x/tools/go/analysis` |
-| [`cmd/dokimi-lint-go`](cmd/dokimi-lint-go) | The command that runs both analyzers, as `go vet` runs its analyzers |
-| [`golangci`](golangci) | The module plugins `errorprefix` and `skipexpiry` of golangci-lint |
+| [`analysis`](analysis) | The analyzers `errorprefix`, `skipexpiry` and `lockblock`, for `golang.org/x/tools/go/analysis` |
+| [`cmd/dokimi-lint-go`](cmd/dokimi-lint-go) | The command that runs the three analyzers, as `go vet` runs its analyzers |
+| [`golangci`](golangci) | The module plugins `errorprefix`, `skipexpiry` and `lockblock` of golangci-lint |
 
-- `errorprefix` reports a constant text of `errors.New` that does not start with the name of its package and a colon, such as `clock: instant is zero`.
+- `errorprefix` reports a constant text of `errors.New` that does not start with the name of its package and a colon, such as `clock: instant is zero`. In a package `main` the text starts with the name of the command, which `go build` gives its binary, such as `greet: no name given`.
 - `skipexpiry` reports a skipped test whose message states a day that has passed, such as `t.Skip("expires 2026-12-31")`.
+- `lockblock` reports a blocking operation inside the critical section of a `sync.Mutex` or a `sync.RWMutex`, such as a send to a channel, and a call inside one of a function that blocks, with the path of calls to the operation. Its settings `interfaces` and `hooks` name the interfaces whose methods block, such as `io.Writer`.
 
-Both analyzers skip generated files.
+Every analyzer skips generated files.
 
 ## Install
 
@@ -42,6 +43,8 @@ dokimi-lint-go -exclude=./internal/legacy/... ./...
 
 The flag `-exclude` takes a package pattern of `go list`, once for each pattern. The analyzers skip each package that a pattern matches, with its external test package.
 
+The flags `-lockblock.interfaces` and `-lockblock.hooks` take a list of interfaces that commas separate, each an import path, a dot and the name of the interface, such as `-lockblock.interfaces=io.Writer,example.com/disk.Device`. `-lockblock=false` runs the other analyzers without `lockblock`.
+
 The command exits as `go vet` does: 0 for packages without a finding, 3 for a finding, 1 for an error such as a package that does not compile, and 2 for a command line that it refuses.
 
 ## golangci-lint
@@ -52,7 +55,7 @@ The command exits as `go vet` does: 0 for packages without a finding, 3 for a fi
 version: v2.14.0
 plugins:
   - module: go.dokimi.dev/lint/golangci
-    version: v0.2.0
+    version: v0.3.0
 ```
 
 It writes the binary `custom-gcl`, which runs the linters that `.golangci.yml` enables:
@@ -63,15 +66,23 @@ linters:
   enable:
     - errorprefix
     - skipexpiry
+    - lockblock
   settings:
     custom:
       errorprefix:
         type: module
       skipexpiry:
         type: module
+      lockblock:
+        type: module
+        settings:
+          interfaces:
+            - example.com/disk.Device
+          hooks:
+            - example.com/plugin.Hook
 ```
 
-Both linters run without settings. The exclusions of `.golangci.yml` select the files whose reports golangci-lint shows, as they do for every linter. In a repository of ergon, the key `go.lint.plugins` of `.ergon.yaml` lists each linter with the package and its version. `ergon tool run` builds the binary from that key, and `ergon init` renders the linters into `.golangci.yml`.
+`errorprefix` and `skipexpiry` run without settings. The exclusions and the `nolint` directives of golangci-lint select the reports that it shows, as they do for every linter. In a repository of ergon, the key `go.lint.analyzers` of `.ergon.yaml` names the package with its version. `ergon tool run` builds the binary from that key, and `ergon init` enables `errorprefix` and `skipexpiry` in `.golangci.yml`.
 
 ## Development
 

@@ -29,10 +29,38 @@ var (
 		":6:2: the skip expired on 2020-01-01, so fix the test and remove the skip"
 	legacy = filepath.FromSlash("legacy/legacy.go") +
 		`:6:14: the text "old" of errors.New does not start with "legacy:"`
+	lockedSend = filepath.FromSlash("locked/locked.go") +
+		":18:7: a send to a channel blocks inside the critical section of s.mu from line 16"
+	lockedSync = filepath.FromSlash("locked/locked.go") +
+		":19:15: locked.Device.Sync of a blocking interface blocks inside the critical section of s.mu from line 16"
 )
 
-// module is the module of the cases: the package demo breaks both rules, and the package legacy
-// breaks the rule of errorprefix.
+// locked is the package of the cases that sends and calls Sync of a Device while a lock is held.
+const locked = `package locked
+
+import "sync"
+
+// Device is an interface whose methods block.
+type Device interface{ Sync() error }
+
+// Store has a lock and a channel.
+type Store struct {
+	mu sync.Mutex
+	ch chan int
+}
+
+// Put sends and syncs d while mu is locked.
+func (s *Store) Put(d Device) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ch <- 1
+	return d.Sync()
+}
+`
+
+// module is the module of the cases: the package demo breaks the rules of errorprefix and
+// skipexpiry, the package legacy breaks the rule of errorprefix, and the package locked breaks the
+// rule of lockblock.
 var module = files.Tree{
 	"go.mod": files.Text("module example.com/demo\n\ngo 1.27\n"),
 	"demo/demo.go": files.Text(
@@ -44,6 +72,7 @@ var module = files.Tree{
 	"legacy/legacy.go": files.Text(
 		"package legacy\n\nimport \"errors\"\n\n// ErrOld has no prefix.\nvar ErrOld = errors.New(\"old\")\n",
 	),
+	"locked/locked.go": files.Text(locked),
 }
 
 func TestMain(m *testing.M) {
@@ -66,10 +95,11 @@ func TestDokimiLintGoProcess(t *testing.T) {
 			omits   []string
 		}{
 			{
-				name:    "exits 3 with the findings of both analyzers",
+				name:    "exits 3 with the findings of every analyzer",
 				args:    []string{"./..."},
 				status:  3,
-				reports: []string{demoPrefix, demoSkip, legacy},
+				reports: []string{demoPrefix, demoSkip, legacy, lockedSend},
+				omits:   []string{lockedSync},
 			},
 			{
 				name:    "skips the packages of each pattern of -exclude",
@@ -79,10 +109,23 @@ func TestDokimiLintGoProcess(t *testing.T) {
 				omits:   []string{legacy},
 			},
 			{
+				name:    "reports the calls through the interfaces of -lockblock.interfaces",
+				args:    []string{"-lockblock.interfaces=example.com/demo/locked.Device", "./locked"},
+				status:  3,
+				reports: []string{lockedSend, lockedSync},
+			},
+			{
+				name:    "runs the other analyzers without lockblock under -lockblock=false",
+				args:    []string{"-lockblock=false", "./..."},
+				status:  3,
+				reports: []string{demoPrefix, demoSkip, legacy},
+				omits:   []string{lockedSend},
+			},
+			{
 				name:   "exits 0 for packages without a finding",
-				args:   []string{"-exclude=./legacy/...", "-exclude=./demo", "./..."},
+				args:   []string{"-exclude=./legacy/...", "-exclude=./demo", "-exclude=./locked", "./..."},
 				status: 0,
-				omits:  []string{demoPrefix, demoSkip, legacy},
+				omits:  []string{demoPrefix, demoSkip, legacy, lockedSend},
 			},
 			{
 				name:    "exits 2 for a pattern of -exclude that go list does not resolve",
@@ -110,6 +153,20 @@ func TestDokimiLintGoProcess(t *testing.T) {
 				}
 			})
 		}
+	})
+}
+
+func TestExcluded(t *testing.T) {
+	t.Parallel()
+
+	t.Run("String", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns the import paths sorted and separated by commas", func(t *testing.T) {
+			t.Parallel()
+			e := excluded{"example.com/demo/legacy": true, "example.com/demo/demo": true}
+			assert.Equal(t, e.String(), "example.com/demo/demo,example.com/demo/legacy", "the import paths")
+		})
 	})
 }
 

@@ -16,13 +16,24 @@ import (
 const (
 	errorPrefixName = "errorprefix"
 	skipExpiryName  = "skipexpiry"
+	lockBlockName   = "lockblock"
 )
 
-// init registers NewErrorPrefix and NewSkipExpiry under the names of their analyzers, which
-// golangci-lint looks up for the linters of those names in its configuration.
+// init registers NewErrorPrefix, NewSkipExpiry and NewLockBlock under the names of their analyzers,
+// which golangci-lint looks up for the linters of those names in its configuration.
 func init() {
 	register.Plugin(errorPrefixName, NewErrorPrefix)
 	register.Plugin(skipExpiryName, NewSkipExpiry)
+	register.Plugin(lockBlockName, NewLockBlock)
+}
+
+// lockBlockSettings are the settings of the plugin lockblock, which set the flags of its analyzer
+// of the same names.
+type lockBlockSettings struct {
+	// Interfaces are the interfaces whose methods block.
+	Interfaces []string `json:"interfaces"`
+	// Hooks are the interfaces whose methods run code outside the module.
+	Hooks []string `json:"hooks"`
 }
 
 // plugin is a module plugin of one analyzer of go.dokimi.dev/lint/analysis.
@@ -38,7 +49,7 @@ func (p plugin) BuildAnalyzers() ([]*goanalysis.Analyzer, error) {
 	return []*goanalysis.Analyzer{p.analyzer}, nil
 }
 
-// GetLoadMode asks golangci-lint for the types of each package, which both analyzers read.
+// GetLoadMode asks golangci-lint for the types of each package, which every analyzer reads.
 func (plugin) GetLoadMode() string {
 	return register.LoadModeTypesInfo
 }
@@ -62,6 +73,30 @@ func NewSkipExpiry(settings any) (register.LinterPlugin, error) {
 		return nil, err
 	}
 	return plugin{analyzer: analysis.SkipExpiry(time.Now, func(string) bool { return false })}, nil
+}
+
+// NewLockBlock returns the plugin lockblock, from the settings of the linter in the configuration of
+// golangci-lint: the lists interfaces and hooks, which set the flags of the same names of its
+// analyzer. Its analyzer reads every package. NewLockBlock returns an error for settings of another
+// form, and for an entry that the analyzer refuses.
+func NewLockBlock(settings any) (register.LinterPlugin, error) {
+	s, err := register.DecodeSettings[lockBlockSettings](settings)
+	if err != nil {
+		return nil, fmt.Errorf("golangci: the settings of %s: %w", lockBlockName, err)
+	}
+	a := analysis.LockBlock(func(string) bool { return false })
+	flags := []struct {
+		name    string
+		entries []string
+	}{{name: "interfaces", entries: s.Interfaces}, {name: "hooks", entries: s.Hooks}}
+	for _, f := range flags {
+		for _, entry := range f.entries {
+			if err := a.Flags.Set(f.name, entry); err != nil {
+				return nil, fmt.Errorf("golangci: %w", err)
+			}
+		}
+	}
+	return plugin{analyzer: a}, nil
 }
 
 // noSettings returns an error for the settings of the linter name, from the configuration of

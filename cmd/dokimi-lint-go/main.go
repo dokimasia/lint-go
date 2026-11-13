@@ -46,12 +46,12 @@ func (e excluded) Set(pattern string) error {
 	return nil
 }
 
-// main runs the analyzers errorprefix and skipexpiry over the packages of the arguments, with the
-// packages of each -exclude skipped, and exits as go vet does.
+// main runs the analyzers errorprefix, skipexpiry and lockblock over the packages of the arguments,
+// with the packages of each -exclude skipped, and exits as go vet does.
 func main() {
 	exclude := excluded{}
 	flag.Var(exclude, excludeFlag,
 		"a package `pattern` that the analyzers skip, such as ./internal/legacy/..., once for each pattern")
 	skip := func(path string) bool { return exclude[path] }
-	multichecker.Main(analysis.ErrorPrefix(skip), analysis.SkipExpiry(time.Now, skip))
+	multichecker.Main(analysis.ErrorPrefix(skip), analysis.SkipExpiry(time.Now, skip), analysis.LockBlock(skip))
 }

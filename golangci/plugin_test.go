@@ -78,6 +78,69 @@ func TestPlugin(t *testing.T) {
 		})
 	}
 
+	t.Run("NewLockBlock", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("is the constructor that golangci-lint finds under lockblock", func(t *testing.T) {
+			t.Parallel()
+			build, err := register.GetPlugin("lockblock")
+			assert.NoError(t, err, "GetPlugin")
+			got, err := build(nil)
+			assert.NoError(t, err, "the constructor")
+			analyzers, err := got.BuildAnalyzers()
+			assert.NoError(t, err, "BuildAnalyzers")
+			assert.Length(t, analyzers, 1, "the analyzers")
+			assert.Equal(t, analyzers[0].Name, "lockblock", "the name of the analyzer")
+			assert.Equal(t, got.GetLoadMode(), register.LoadModeTypesInfo, "the load mode")
+		})
+
+		t.Run(
+			"returns a plugin whose analyzer reports the calls of the interfaces of its settings",
+			func(t *testing.T) {
+				t.Parallel()
+				got, err := golangci.NewLockBlock(map[string]any{
+					"interfaces": []any{"devices.Device"},
+					"hooks":      []any{"devices.Plugin"},
+				})
+				assert.NoError(t, err, "NewLockBlock")
+				analyzers, err := got.BuildAnalyzers()
+				assert.NoError(t, err, "BuildAnalyzers")
+				analysistest.Run(t, analysistest.TestData(), analyzers[0], "devices")
+			},
+		)
+
+		refused := []struct {
+			name string
+			give any
+			want string
+		}{
+			{
+				name: "returns an error for a setting that it does not know",
+				give: map[string]any{"exclude": []any{"./legacy/..."}},
+				want: "golangci: the settings of lockblock: ",
+			},
+			{
+				name: "returns an error for an entry of interfaces that the analyzer refuses",
+				give: map[string]any{"interfaces": []any{"Device"}},
+				want: `golangci: lockblock: the entry "Device" is no import path, a dot and an interface name`,
+			},
+			{
+				name: "returns an error for an entry of hooks that the analyzer refuses",
+				give: map[string]any{"hooks": []any{"Plugin"}},
+				want: `golangci: lockblock: the entry "Plugin" is no import path, a dot and an interface name`,
+			},
+		}
+		for _, tt := range refused {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				got, err := golangci.NewLockBlock(tt.give)
+				assert.HasError(t, err, "NewLockBlock")
+				assert.Contains(t, err.Error(), tt.want, "the error")
+				assert.Nil(t, got, "the plugin")
+			})
+		}
+	})
+
 	t.Run("BuildAnalyzers", func(t *testing.T) {
 		t.Parallel()
 
