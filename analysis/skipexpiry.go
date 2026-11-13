@@ -41,24 +41,23 @@ func SkipExpiry(now func() time.Time, skip Skip) *analysis.Analyzer {
 				if !isTest(pass, f) {
 					continue
 				}
-				ast.Inspect(f, func(n ast.Node) bool {
+				for n := range ast.Preorder(f) {
 					call, ok := n.(*ast.CallExpr)
 					if !ok || len(call.Args) == 0 {
-						return true
+						continue
 					}
 					sel, ok := call.Fun.(*ast.SelectorExpr)
 					if !ok || (sel.Sel.Name != skipMethod && sel.Sel.Name != skipfMethod) {
-						return true
+						continue
 					}
 					text := pass.TypesInfo.Types[call.Args[0]].Value
 					if text == nil || text.Kind() != constant.String {
-						return true
+						continue
 					}
-					if day := expires.FindStringSubmatch(constant.StringVal(text)); len(day) > 1 && day[1] < today {
+					if day := expires.FindStringSubmatch(constant.StringVal(text)); len(day) == 2 && day[1] < today {
 						pass.Reportf(call.Pos(), "the skip expired on %s, so fix the test and remove the skip", day[1])
 					}
-					return true
-				})
+				}
 			}
 			return nil, nil
 		},

@@ -50,6 +50,16 @@ func TestFunction(t *testing.T) {
 	skip(t, "expires 2020-01-01")
 }
 
+func TestSubtest(t *testing.T) {
+	t.Run("case", func(t *testing.T) {
+		t.Skip("expires 2026-02-01") // want `the skip expired on 2026-02-01, so fix the test and remove the skip`
+	})
+}
+
+func TestNumber(t *testing.T) {
+	t.Skip(42)
+}
+
 // skip skips t with message, through a function that is no method Skip.
 func skip(t *testing.T, message string) {
 	t.Helper()
